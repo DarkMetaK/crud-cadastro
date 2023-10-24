@@ -4,65 +4,83 @@ import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import java.util.Optional;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
+import com.nodebounty.config.errors.RegistroNaoEncontradoException;
 import com.nodebounty.domain.cartao.Cartao;
 import com.nodebounty.domain.cartao.CartaoRepository;
+import com.nodebounty.domain.cliente.ClienteRepository;
+import com.nodebounty.domain.contacorrente.ContaCorrenteRepository;
 
-import jakarta.el.ELException;
 
 @Service
 public class CartaoService {
 
 	@Autowired
-	private CartaoRepository repository;
+	private CartaoRepository cartaoRepository;
+	
+	@Autowired
+	private ClienteRepository clienteRepository;
+	
+	@Autowired
+	private ContaCorrenteRepository contaRepository;
 
-	/*
-	 * Método para listar todos os cartões do banco. Poderiamos usar o repository
-	 * direto no controller e chamar o findAll() lá? Poderiamos, mas eu desconfio
-	 * que eventualmente vamos precisar usar de fato uma classe de serviço pro
-	 * cartão, então melhor deixar aqui mesmo
-	 */
-
-	/*
-	 * TALVEZ O PROFESSOR RECLAME TAMBÉM, e a gente acabe tendo que criar um service
-	 * pra todas as classes mesmo que possa usar o repository direto, vamos ver.
-	 */
-
-	Logger logger = LogManager.getLogger(this.getClass());
-
-
-    public List<Cartao> consultaCartao() {
-        return repository.findAll();
-    }
-
-
-    public boolean gerarCartao(){
-        Cartao novoCartao =new Cartao();
-        try{
-            repository.save(novoCartao);
-            return true;
-        }
-        catch(ELException e){
-            logger.info(e);
-            return false;
-        }
-        
+	
+	// Ja que optamos por separar o cliente da conta, pra facilitar nas requisições, invés de receber
+	// o id da conta diretamente, vamos usar o do cliente, e com o do cliente buscar os dados da conta
+	// para ai sim associar a conta ao cartao
+    public Cartao gerarNovoCartao(String idCliente){
+    	var cliente = clienteRepository.findById(idCliente);
+    	
+    	// Verificando se o cliente existe
+    	if (!cliente.isPresent()) {
+    		throw new RegistroNaoEncontradoException("Cliente não encontrado no sistema");
+    	}
+    	
+    	var conta = contaRepository.findByCliente(cliente.get());
+    	
+    	// Verificando se a conta existe
+    	if (conta == null) {
+    		throw new RegistroNaoEncontradoException("Conta não encontrada no sistema");
+    	}
+    	
+    	// Gerando o cartão, validações bem sucedidas
+    	var cartao = new Cartao();
+    	cartao.setConta(conta);
+    	cartao.setPlano(conta.getPlano());
+    	
+    	return cartaoRepository.save(cartao);
     }
     
-    public boolean excluiCartao(Long cartaoId) {
-        Optional<Cartao> cartaoOptional = repository.findById(cartaoId);
-
-        if (cartaoOptional.isPresent()) {
-            repository.delete(cartaoOptional.get());
-            logger.info("Cartão com ID " + cartaoId + " excluído com sucesso.");
-            return true;
-        } else {
-            logger.info("Tentativa de exclusão de um cartão inexistente com ID " + cartaoId);
-            return false;
-        }
+    public List<Cartao> consultaTodosCartoesPeloIdDoCliente(String idCliente) {
+    	var cliente = clienteRepository.findById(idCliente);
+    	
+    	// Verificando se o cliente existe
+    	if (!cliente.isPresent()) {
+    		throw new RegistroNaoEncontradoException("Cliente não encontrado no sistema");
+    	}
+    	
+    	var conta = contaRepository.findByCliente(cliente.get());
+    	
+    	// Verificando se a conta existe
+    	if (conta == null) {
+    		throw new RegistroNaoEncontradoException("Conta não encontrada no sistema");
+    	}
+    	
+    	// Buscando e retornando todos cartoes associados a conta
+    	return cartaoRepository.findAllByConta(conta);
     }
+    
+    public void excluiCartao(String cartaoId) {
+    	var cartaoExisteNoSistema = cartaoRepository.existsById(cartaoId);
+    	
+    	// Retornando erro caso o id do cartao não exista no banco
+    	if (!cartaoExisteNoSistema) {
+    		throw new RegistroNaoEncontradoException("Conta não encontrada no sistema");
+    	}
+    	
+    	// Excluindo cartao
+    	
+    	cartaoRepository.deleteById(cartaoId);
+    }
+    
 }

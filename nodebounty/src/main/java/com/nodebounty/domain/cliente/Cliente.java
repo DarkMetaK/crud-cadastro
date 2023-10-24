@@ -39,7 +39,7 @@ public class Cliente implements UserDetails {
 	@Id
 	@GeneratedValue(strategy = GenerationType.UUID)
 	@Column(name = "IDCLIENTE")
-	private int idCliente;
+	private String idCliente;
 	@Column(name = "NOME")
 	private String nome;
 	@Column(name = "ENDERECO")
